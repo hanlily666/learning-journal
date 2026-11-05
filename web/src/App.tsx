@@ -208,7 +208,9 @@ function SessionHeader({ session, onRename }: { session: Session; onRename: (nam
 
 function MessageList({ messages }: { messages: Message[] }) {
   const end = useRef<HTMLDivElement>(null)
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [messages])
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' })
+  }, [messages])
   return (
     <div className="messages">
       {messages.map((m) => (
