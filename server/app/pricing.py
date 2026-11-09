@@ -5,6 +5,8 @@ from typing import Any
 # input, output, cache read, cache write (5-minute TTL = 1.25x input)
 PRICES: dict[str, tuple[float, float, float, float]] = {
     "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
+    # The evaluation judge (prompts under 100K tokens).
+    "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
     # Possible refusal-fallback targets.
     "claude-opus-5": (5.00, 25.00, 0.50, 6.25),
     "claude-opus-4-8": (5.00, 25.00, 0.50, 6.25),

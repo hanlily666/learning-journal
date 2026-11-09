@@ -8,6 +8,7 @@ import {
   type Session,
   type SessionView,
 } from './api/client'
+import ExtractedPage from './Extracted'
 
 function appendDelta(content: ContentBlock[], kind: 'text' | 'thinking', text: string): ContentBlock[] {
   const last = content[content.length - 1]
@@ -26,6 +27,7 @@ export default function App() {
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [view, setView] = useState<SessionView | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState<'chat' | 'extracted'>('chat')
   const stopFollowing = useRef<(() => void) | null>(null)
 
   const refreshSessions = useCallback(async () => {
@@ -72,6 +74,7 @@ export default function App() {
   const open = async (id: number) => {
     stopFollowing.current?.()
     stopFollowing.current = null
+    setPage('chat')
     setCurrentId(id)
     const loaded = await loadSession(id)
     const last = loaded.messages[loaded.messages.length - 1]
@@ -128,10 +131,14 @@ export default function App() {
         <button className="new-session" onClick={newSession}>
           + New session
         </button>
+        <button className={`nav ${page === 'extracted' ? 'active' : ''}`} onClick={() => setPage('extracted')}>
+          Extracted
+        </button>
         <ul>
           {sessions.map((s) => (
             <li key={s.id}>
               <button className={s.id === currentId ? 'active' : ''} onClick={() => run(() => open(s.id))}>
+                {s.subject && <span className={`chip ${s.subject}`}>{s.subject}</span>}
                 {sessionLabel(s)}
               </button>
             </li>
@@ -139,30 +146,36 @@ export default function App() {
         </ul>
       </aside>
       <main className="chat">
-        {error && (
-          <div className="banner error" role="alert">
-            {error}
-          </div>
-        )}
-        {view ? (
-          <>
-            <SessionHeader session={view.session} onRename={rename} />
-            {view.context_warning && (
-              <div className="banner warning">
-                This conversation is about {Math.round(view.context_tokens / 1000)}K tokens long. Start a new
-                session to keep replies fast and cheap.
-              </div>
-            )}
-            <MessageList messages={view.messages} />
-            {view.can_retry && !replying && (
-              <div className="retry">
-                <button onClick={retry}>Retry the last reply</button>
-              </div>
-            )}
-            <Composer disabled={replying} onSend={send} />
-          </>
+        {page === 'extracted' ? (
+          <ExtractedPage onOpenSession={(id) => run(() => open(id))} />
         ) : (
-          <div className="empty">Pick a session, or start a new one.</div>
+          <>
+            {error && (
+              <div className="banner error" role="alert">
+                {error}
+              </div>
+            )}
+            {view ? (
+              <>
+                <SessionHeader session={view.session} onRename={rename} />
+                {view.context_warning && (
+                  <div className="banner warning">
+                    This conversation is about {Math.round(view.context_tokens / 1000)}K tokens long. Start a
+                    new session to keep replies fast and cheap.
+                  </div>
+                )}
+                <MessageList messages={view.messages} />
+                {view.can_retry && !replying && (
+                  <div className="retry">
+                    <button onClick={retry}>Retry the last reply</button>
+                  </div>
+                )}
+                <Composer disabled={replying} onSend={send} />
+              </>
+            ) : (
+              <div className="empty">Pick a session, or start a new one.</div>
+            )}
+          </>
         )}
       </main>
     </div>

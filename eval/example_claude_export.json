@@ -1,0 +1,60 @@
+[
+  {
+    "uuid": "conv-0001",
+    "name": "What is RAG?",
+    "summary": "",
+    "created_at": "2026-10-01T09:00:00.000000Z",
+    "updated_at": "2026-10-01T09:05:00.000000Z",
+    "account": {"uuid": "made-up-account"},
+    "chat_messages": [
+      {
+        "uuid": "msg-0001",
+        "text": "What is retrieval-augmented generation?",
+        "content": [{"type": "text", "text": "What is retrieval-augmented generation?"}],
+        "sender": "human",
+        "created_at": "2026-10-01T09:00:00.000000Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "msg-0002",
+        "text": "",
+        "content": [
+          {"type": "thinking", "thinking": "The user wants a definition."},
+          {"type": "text", "text": "It retrieves relevant documents first, "},
+          {"type": "tool_use", "name": "web_search", "input": {"query": "RAG paper"}},
+          {"type": "tool_result", "name": "web_search", "content": [{"type": "text", "text": "Lewis et al."}]},
+          {"type": "text", "text": "then answers using them."}
+        ],
+        "sender": "assistant",
+        "created_at": "2026-10-01T09:00:20.000000Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "msg-0003",
+        "text": "",
+        "content": [{"type": "tool_use", "name": "web_search", "input": {}}],
+        "sender": "assistant",
+        "created_at": "2026-10-01T09:00:30.000000Z",
+        "attachments": [],
+        "files": []
+      },
+      {
+        "uuid": "msg-0004",
+        "text": "Thanks! And how do I evaluate it?",
+        "sender": "human",
+        "created_at": "2026-10-01T09:04:00.000000Z",
+        "attachments": [],
+        "files": []
+      }
+    ]
+  },
+  {
+    "uuid": "conv-0002",
+    "name": "",
+    "created_at": "2026-10-02T18:00:00.000000Z",
+    "updated_at": "2026-10-02T18:00:00.000000Z",
+    "chat_messages": []
+  }
+]

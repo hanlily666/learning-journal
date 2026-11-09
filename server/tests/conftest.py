@@ -51,5 +51,5 @@ async def engine(database_url):
 @pytest.fixture
 async def db(engine):
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE api_request, message, session RESTART IDENTITY CASCADE"))
+        await conn.execute(text("TRUNCATE item, segment, api_request, message, session RESTART IDENTITY CASCADE"))
     return make_sessionmaker(engine)

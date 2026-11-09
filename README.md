@@ -3,9 +3,10 @@
 Chat with Claude in one place, and (in later phases) turn those chats into a journal, a French
 dictionary, and a daily recap with to-dos.
 
-This is **Phase 1: chat and storage**. It's a plain chat app that never loses a message. Every
-message is stored with its ID and UTC timestamp, and you can close the app and resume a session
-days later.
+This is **Phase 2: AI extraction**. Phase 1 built a plain chat app that never loses a message.
+Every message is stored with its ID and UTC timestamp, and you can close the app and resume a
+session days later. Phase 2 adds extraction: after you chat, an agent picks the key points out of
+AI sessions, and they are listed on the **Extracted** page.
 
 - `server/` is the Python API (FastAPI, SQLAlchemy 2, Alembic, Pydantic) with Postgres.
 - `web/` is the browser app (Vite, React, TypeScript), with types generated from the API's OpenAPI schema.
@@ -65,8 +66,67 @@ and they have no backups, which is why the backup script below exists.
 - **Cost log:** every API call, failed ones included, is logged in the `api_request` table, with
   the step, session, model requested and served, token counts, stop reason, request ID, and cost.
 
-Run the server as a single process (one uvicorn worker), because live reply streaming is kept
-in memory.
+Run the server as a single process (one uvicorn worker), because live reply streaming and the
+extraction worker are kept in memory.
+
+## How extraction works
+
+- **When:** starting a new session, or pressing **Process now** on the Extracted page, queues
+  every other session that has unprocessed messages. There is no timer. A session with a reply
+  still streaming waits for the next trigger, so a segment never splits a reply in half.
+- **Segments:** a segment is every complete message after the session's checkpoint (the ID of
+  the last processed message). Only plain text is used: no thinking summaries, and no
+  injected-context messages.
+- **Classification:** one structured request labels each segment AI, French, or messy. AI plus
+  French counts as messy. The session shows its latest label.
+- **AI segments** go to the agent (the SDK's Tool Runner) with two tools. `read_session` reads
+  earlier messages of the session. `submit_items` saves the subject, the summary, and the items
+  (concepts to review, knowledge gaps, things to explore, sources), each citing the new messages
+  it came from and saying why it was picked. The agent also gets the summaries of the session's
+  earlier segments and is told to extract only from the new messages. The tool calls are counted
+  in code, at most 8 per run. **French** segments are held for Phase 6. **Messy** segments are
+  skipped, and the classifier's reason is kept.
+- **Saving:** a segment's items, status, and the session's checkpoint are saved in one
+  transaction. Segments run one at a time, oldest first. A failed run is retried once. After
+  that, the segment needs attention and gets a **Retry** button, and later messages of that
+  session wait behind it. On startup, segments left running are queued again.
+- **Selection skill:** `server/app/skills/ai_selection.md` tells the agent what is worth
+  picking. It is my draft to write; the file holds only a placeholder for now.
+- Every classification and agent call is logged in `api_request` (steps `classification` and
+  `extraction`).
+
+## Evaluating extraction
+
+The evaluation uses my own Claude chats, so all of its data lives in `eval/`, which is never
+committed. The only exception is the made-up `eval/example_claude_export.json`. Turn on the
+hook that enforces this once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Put the Claude export's `conversations.json` in `eval/exports/claude/`, then, from `server/`:
+
+```bash
+uv run python -m evaluation list                         # the conversations in the export
+uv run python -m evaluation sample ID... --tune ID... --split ID...
+#   about 20 sessions; --tune marks the ~5 to tune on, --split the 2–3 processed in two parts
+#   then label each one in eval/data/labels.json: ai, french or messy, plus its items
+uv run python -m evaluation run --set tune               # the real pipeline, in a journal_eval database
+uv run python -m evaluation baseline --set tune          # one structured request per AI session
+uv run python -m evaluation judge eval/data/runs/<run>   # precision and recall per field
+```
+
+- `run` resets a separate `journal_eval` database on the same Postgres server, imports the
+  sessions, and runs the real pipeline. Split sessions get their second half after the first
+  is processed, as if continued later.
+- Classification, the baseline, and the judge go through Message Batches at half price. The
+  judge is Claude Haiku 5.5 at low effort. Its matches are saved to `judge_matches.json` for
+  spot-checking.
+- Each paid step prints a cost estimate and asks first. Results that didn't change (same
+  messages, prompts, skill, and model) are reused, and a run prints what it spent and its cache
+  reads.
+- Use sessions for the skill's examples that are not in the evaluation set.
 
 ## Tests
 
@@ -79,9 +139,11 @@ cd ../web
 npm run typecheck && npm run lint
 ```
 
-The tests never call the real API. Every Claude call goes through one wrapper
+The tests never call the real API. Every chat call goes through one wrapper
 (`server/app/claude.py`), and the tests replace its transport with a **scripted model**
-(`server/tests/scripted.py`) that replays prepared replies. The scripted scenarios are:
+(`server/tests/scripted.py`) that replays prepared replies. Extraction tests use a real Anthropic
+client whose HTTP calls get canned replies (`server/tests/fake_api.py`), so the Tool Runner
+itself runs. The scripted scenarios are:
 
 - a normal reply
 - a stream that stops halfway
@@ -114,8 +176,9 @@ Docker's: for the local database use `PG_DUMP="docker compose exec -T db pg_dump
 Supabase use `PG_DUMP="docker run --rm -i postgres:17 pg_dump"`. Restore with
 `pg_restore --no-owner --dbname "$DATABASE_URL" <file>.dump`.
 
-## Not in Phase 1
+## Not built yet
 
-The following are not built yet: assistant tools, extraction, the journal page, deployment, and
+The following are not built yet: assistant tools, French extraction, knowledge decisions and
+sections, the journal page, importing chat exports into the real database, deployment, and
 login. Hosting on Railway and Supabase Auth come after Phase 1, and nothing is deployed before
 login exists.

@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anthropic
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -14,31 +15,40 @@ from app.chat import ChatService, NothingToRetry, ReplyInProgress, SessionNotFou
 from app.claude import AnthropicTransport, ClaudeClient, Transport
 from app.config import Settings, get_settings
 from app.db import make_engine, make_sessionmaker
-from app.schemas import (MessageCreate, MessageOut, SendResult, SessionCreate, SessionOut,
-                         SessionRename, SessionView)
+from app.extraction import ExtractionService, SegmentNotFound, SegmentNotRetryable
+from app.schemas import (ExtractedSession, MessageCreate, MessageOut, SegmentOut, SendResult,
+                         SessionCreate, SessionOut, SessionRename, SessionView, TriggerResult)
 
 log = logging.getLogger(__name__)
 
 WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 
 
-def create_app(settings: Settings | None = None, transport: Transport | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, transport: Transport | None = None,
+               client: anthropic.AsyncAnthropic | None = None) -> FastAPI:
+    """`transport` replaces Claude for chat and `client` for extraction (tests pass fakes)."""
     settings = settings or get_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         engine = make_engine(settings.database_url)
         sessionmaker = make_sessionmaker(engine)
-        claude = ClaudeClient(transport or AnthropicTransport(api_key=settings.anthropic_api_key),
-                              sessionmaker, settings)
+        api_client = client or anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        claude = ClaudeClient(transport or AnthropicTransport(api_client), sessionmaker, settings)
         app.state.chat = ChatService(sessionmaker, claude, settings)
+        app.state.extraction = ExtractionService(sessionmaker, api_client, settings)
         recovered = await app.state.chat.recover_interrupted()
         if recovered:
             log.warning("marked %d unfinished replies as interrupted", recovered)
+        requeued = await app.state.extraction.recover()
+        if requeued:
+            log.warning("queued %d unfinished extraction segments again", requeued)
+            app.state.extraction.kick()
         if not settings.anthropic_api_key and transport is None:
             log.warning("ANTHROPIC_API_KEY is not set; replies will fail")
         yield
         await app.state.chat.abandon()
+        await app.state.extraction.abandon()
         await engine.dispose()
 
     app = FastAPI(title="Learning Journal", lifespan=lifespan)
@@ -47,6 +57,9 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     def chat(request: Request) -> ChatService:
         return request.app.state.chat
+
+    def extraction(request: Request) -> ExtractionService:
+        return request.app.state.extraction
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:
@@ -58,7 +71,10 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
 
     @app.post("/api/sessions", response_model=SessionOut, status_code=201)
     async def create_session(body: SessionCreate, request: Request):
-        return await chat(request).create_session(body.name)
+        """Starting a session also extracts every other session's unprocessed messages."""
+        session = await chat(request).create_session(body.name)
+        await extraction(request).trigger()
+        return session
 
     @app.get("/api/sessions/{session_id}", response_model=SessionView)
     async def get_session(session_id: int, request: Request):
@@ -123,6 +139,24 @@ def create_app(settings: Settings | None = None, transport: Transport | None = N
                 service.broker.unsubscribe(message_id, queue)
 
         return EventSourceResponse(events())
+
+    @app.get("/api/extracted", response_model=list[ExtractedSession])
+    async def extracted(request: Request):
+        return await extraction(request).extracted()
+
+    @app.post("/api/extraction/run", response_model=TriggerResult, status_code=202)
+    async def process_now(request: Request):
+        """The Process now button: the same trigger as starting a new session."""
+        return TriggerResult(queued=await extraction(request).trigger())
+
+    @app.post("/api/segments/{segment_id}/retry", response_model=SegmentOut, status_code=202)
+    async def retry_segment(segment_id: int, request: Request):
+        try:
+            return await extraction(request).retry(segment_id)
+        except SegmentNotFound:
+            raise HTTPException(404, "Segment not found")
+        except SegmentNotRetryable:
+            raise HTTPException(409, "Only a segment that needs attention can be retried")
 
     if WEB_DIST.is_dir():
         app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")

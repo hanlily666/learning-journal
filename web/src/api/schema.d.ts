@@ -31,7 +31,10 @@ export interface paths {
         /** List Sessions */
         get: operations["list_sessions_api_sessions_get"];
         put?: never;
-        /** Create Session */
+        /**
+         * Create Session
+         * @description Starting a session also extracts every other session's unprocessed messages.
+         */
         post: operations["create_session_api_sessions_post"];
         delete?: never;
         options?: never;
@@ -112,14 +115,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/extracted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Extracted */
+        get: operations["extracted_api_extracted_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/extraction/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process Now
+         * @description The Process now button: the same trigger as starting a new session.
+         */
+        post: operations["process_now_api_extraction_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/segments/{segment_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Segment */
+        post: operations["retry_segment_api_segments__segment_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ExtractedSession */
+        ExtractedSession: {
+            session: components["schemas"]["SessionOut"];
+            /** Segments */
+            segments: components["schemas"]["SegmentOut"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ItemOut */
+        ItemOut: {
+            /** Id */
+            id: number;
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "explore" | "source" | "gap" | "concept";
+            /** Text */
+            text: string;
+            /** Source Message Ids */
+            source_message_ids: number[];
+            /** Reason */
+            reason: string;
+            /** Review State */
+            review_state: string;
+            /** Agent State */
+            agent_state: string;
         };
         /** MessageCreate */
         MessageCreate: {
@@ -160,6 +243,49 @@ export interface components {
             /** Injected Context */
             injected_context: boolean;
         };
+        /** SegmentOut */
+        SegmentOut: {
+            /** Id */
+            id: number;
+            /** Session Id */
+            session_id: number;
+            /** First Message Id */
+            first_message_id: number;
+            /** Last Message Id */
+            last_message_id: number;
+            /** Label */
+            label: ("ai" | "french" | "messy") | null;
+            /** Label Reason */
+            label_reason: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "done" | "held" | "skipped" | "needs_attention";
+            /** Subject */
+            subject: string | null;
+            /** Summary */
+            summary: string | null;
+            /** Error */
+            error: string | null;
+            /** Attempts */
+            attempts: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ItemOut"][];
+        };
         /** SendResult */
         SendResult: {
             user_message: components["schemas"]["MessageOut"];
@@ -179,7 +305,7 @@ export interface components {
             /** Source */
             source: string;
             /** Subject */
-            subject: string | null;
+            subject: ("ai" | "french" | "messy") | null;
             /**
              * Created At
              * Format: date-time
@@ -207,6 +333,11 @@ export interface components {
             context_warning: boolean;
             /** Can Retry */
             can_retry: boolean;
+        };
+        /** TriggerResult */
+        TriggerResult: {
+            /** Queued */
+            queued: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -455,6 +586,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extracted_api_extracted_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtractedSession"][];
+                };
+            };
+        };
+    };
+    process_now_api_extraction_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerResult"];
+                };
+            };
+        };
+    };
+    retry_segment_api_segments__segment_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                segment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SegmentOut"];
                 };
             };
             /** @description Validation Error */

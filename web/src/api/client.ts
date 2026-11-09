@@ -6,6 +6,10 @@ export type Message = components['schemas']['MessageOut']
 export type SessionView = components['schemas']['SessionView']
 export type SendResult = components['schemas']['SendResult']
 export type ContentBlock = Message['content'][number]
+export type ExtractedSession = components['schemas']['ExtractedSession']
+export type Segment = components['schemas']['SegmentOut']
+export type Item = components['schemas']['ItemOut']
+export type TriggerResult = components['schemas']['TriggerResult']
 
 export class ApiError extends Error {
   status: number
@@ -44,6 +48,9 @@ export const api = {
   sendMessage: (id: number, text: string) =>
     request<SendResult>('POST', `/api/sessions/${id}/messages`, { text }),
   retry: (id: number) => request<Message>('POST', `/api/sessions/${id}/retry`),
+  extracted: () => request<ExtractedSession[]>('GET', '/api/extracted'),
+  processNow: () => request<TriggerResult>('POST', '/api/extraction/run'),
+  retrySegment: (id: number) => request<Segment>('POST', `/api/segments/${id}/retry`),
 }
 
 export type ReplyEvents = {

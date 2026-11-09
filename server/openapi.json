@@ -50,6 +50,7 @@
       },
       "post": {
         "summary": "Create Session",
+        "description": "Starting a session also extracts every other session's unprocessed messages.",
         "operationId": "create_session_api_sessions_post",
         "requestBody": {
           "content": {
@@ -296,10 +297,110 @@
           }
         }
       }
+    },
+    "/api/extracted": {
+      "get": {
+        "summary": "Extracted",
+        "operationId": "extracted_api_extracted_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExtractedSession"
+                  },
+                  "type": "array",
+                  "title": "Response Extracted Api Extracted Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/extraction/run": {
+      "post": {
+        "summary": "Process Now",
+        "description": "The Process now button: the same trigger as starting a new session.",
+        "operationId": "process_now_api_extraction_run_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/segments/{segment_id}/retry": {
+      "post": {
+        "summary": "Retry Segment",
+        "operationId": "retry_segment_api_segments__segment_id__retry_post",
+        "parameters": [
+          {
+            "name": "segment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Segment Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ExtractedSession": {
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/SessionOut"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentOut"
+            },
+            "type": "array",
+            "title": "Segments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session",
+          "segments"
+        ],
+        "title": "ExtractedSession"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -312,6 +413,58 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "ItemOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "explore",
+              "source",
+              "gap",
+              "concept"
+            ],
+            "title": "Field"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source_message_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Source Message Ids"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "review_state": {
+            "type": "string",
+            "title": "Review State"
+          },
+          "agent_state": {
+            "type": "string",
+            "title": "Agent State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "field",
+          "text",
+          "source_message_ids",
+          "reason",
+          "review_state",
+          "agent_state"
+        ],
+        "title": "ItemOut"
       },
       "MessageCreate": {
         "properties": {
@@ -415,6 +568,137 @@
         ],
         "title": "MessageOut"
       },
+      "SegmentOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "integer",
+            "title": "Session Id"
+          },
+          "first_message_id": {
+            "type": "integer",
+            "title": "First Message Id"
+          },
+          "last_message_id": {
+            "type": "integer",
+            "title": "Last Message Id"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ai",
+                  "french",
+                  "messy"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "label_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Reason"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "done",
+              "held",
+              "skipped",
+              "needs_attention"
+            ],
+            "title": "Status"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemOut"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "first_message_id",
+          "last_message_id",
+          "label",
+          "label_reason",
+          "status",
+          "subject",
+          "summary",
+          "error",
+          "attempts",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SegmentOut"
+      },
       "SendResult": {
         "properties": {
           "user_message": {
@@ -473,7 +757,12 @@
           "subject": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "ai",
+                  "french",
+                  "messy"
+                ]
               },
               {
                 "type": "null"
@@ -552,6 +841,19 @@
           "can_retry"
         ],
         "title": "SessionView"
+      },
+      "TriggerResult": {
+        "properties": {
+          "queued": {
+            "type": "integer",
+            "title": "Queued"
+          }
+        },
+        "type": "object",
+        "required": [
+          "queued"
+        ],
+        "title": "TriggerResult"
       },
       "ValidationError": {
         "properties": {

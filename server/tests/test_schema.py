@@ -45,7 +45,7 @@ async def test_external_ids_are_unique_per_source(db, engine):
         insert = text("INSERT INTO message (session_id, role, status, source, external_id) "
                       "VALUES (:s, 'user', 'complete', :src, 'abc')")
         await conn.execute(insert, {"s": session_id, "src": "claude"})
-        await conn.execute(insert, {"s": session_id, "src": "chatgpt"})
+        await conn.execute(insert, {"s": session_id, "src": "codex"})
     with pytest.raises(IntegrityError):
         async with engine.begin() as conn:
             await conn.execute(insert, {"s": session_id, "src": "claude"})
@@ -58,9 +58,9 @@ async def test_row_level_security_hides_every_table_from_other_roles(db, engine)
             "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'public_api') "
             "THEN CREATE ROLE public_api; END IF; END $$"))
         await conn.execute(text(
-            "GRANT SELECT, INSERT ON session, message, api_request, alembic_version TO public_api"))
+            "GRANT SELECT, INSERT ON session, message, api_request, segment, item, alembic_version TO public_api"))
         await conn.execute(text("SET LOCAL ROLE public_api"))
-        for table in ("session", "message", "api_request", "alembic_version"):
+        for table in ("session", "message", "api_request", "segment", "item", "alembic_version"):
             assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar() == 0
         with pytest.raises(DBAPIError, match="row-level security"):
             async with conn.begin_nested():

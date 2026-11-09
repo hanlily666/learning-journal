@@ -1,0 +1,10 @@
+#!/bin/sh
+# Refuse commits that add anything under eval/ except the made-up example export.
+# Enabled per clone with: git config core.hooksPath .githooks
+blocked=$(git diff --cached --name-only --diff-filter=ACMR -- eval/ | grep -v '^eval/example_claude_export.json$')
+if [ -n "$blocked" ]; then
+  echo "Commit blocked: eval/ holds my real chat data and is never committed:" >&2
+  echo "$blocked" | sed 's/^/  /' >&2
+  echo "Unstage them with: git restore --staged eval/" >&2
+  exit 1
+fi

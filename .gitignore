@@ -7,3 +7,7 @@ node_modules/
 web/dist/
 backups/
 .DS_Store
+# Evaluation data comes from my real chats and is never committed. Only the made-up
+# example export is. .githooks/pre-commit enforces this even for `git add -f`.
+eval/*
+!eval/example_claude_export.json

@@ -154,22 +154,32 @@ class ClaudeClient:
         return result
 
     def _record_usage(self, log: ApiRequest, final: Final) -> None:
-        u = final.usage
-        log.model_served = final.model
-        log.stop_reason = final.stop_reason
-        log.request_id = final.request_id
-        log.input_tokens = u.get("input_tokens")
-        log.output_tokens = u.get("output_tokens")
-        log.cache_read_tokens = u.get("cache_read_input_tokens")
-        log.cache_write_tokens = u.get("cache_creation_input_tokens")
-        log.usage = u
-        cost = cost_usd(u, final.model)
-        log.cost_usd = Decimal(str(round(cost, 6))) if cost is not None else None
+        record_usage(log, model=final.model, stop_reason=final.stop_reason,
+                     request_id=final.request_id, usage=final.usage)
 
     async def _save_log(self, log: ApiRequest) -> None:
-        async with self.sessionmaker() as db:
-            db.add(log)
-            await db.commit()
+        await save_log(self.sessionmaker, log)
+
+
+def record_usage(log: ApiRequest, *, model: str | None, stop_reason: str | None,
+                 request_id: str | None, usage: dict[str, Any]) -> None:
+    """Fill a log row from a finished call's usage, with its cost."""
+    log.model_served = model
+    log.stop_reason = stop_reason
+    log.request_id = request_id
+    log.input_tokens = usage.get("input_tokens")
+    log.output_tokens = usage.get("output_tokens")
+    log.cache_read_tokens = usage.get("cache_read_input_tokens")
+    log.cache_write_tokens = usage.get("cache_creation_input_tokens")
+    log.usage = usage
+    cost = cost_usd(usage, model)
+    log.cost_usd = Decimal(str(round(cost, 6))) if cost is not None else None
+
+
+async def save_log(sessionmaker: async_sessionmaker, log: ApiRequest) -> None:
+    async with sessionmaker() as db:
+        db.add(log)
+        await db.commit()
 
 
 class AnthropicTransport:

@@ -36,7 +36,7 @@ asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 
 [tool.pyright]
-include = ["app", "tests", "migrations"]
+include = ["app", "tests", "migrations", "evaluation"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
