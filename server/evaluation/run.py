@@ -39,6 +39,8 @@ EXPORT = EVAL / "exports" / "claude" / "conversations.json"
 DATA = EVAL / "data"
 SESSIONS = DATA / "sessions.json"
 LABELS = DATA / "labels.json"
+# Conversations used as examples in the selection skill: never sampled for the evaluation.
+SKILL_EXAMPLES = EVAL / "skill_examples.txt"
 EVAL_DB = "journal_eval"
 JUDGE_MODEL = "claude-haiku-5-5"
 BATCH_DISCOUNT = 0.5
@@ -174,11 +176,21 @@ def cmd_list(_: argparse.Namespace) -> None:
         print(f"{c.id}  {c.created_at:%Y-%m-%d}  {len(c.messages):3d} messages  {c.name}")
 
 
+def skill_example_ids() -> set[str]:
+    """One conversation ID per line; text after # is a note."""
+    if not SKILL_EXAMPLES.exists():
+        return set()
+    return {line.split("#")[0].strip() for line in SKILL_EXAMPLES.read_text().splitlines()} - {""}
+
+
 def cmd_sample(args: argparse.Namespace) -> None:
     by_id = {c.id: c for c in parse(EXPORT)}
     missing = [i for i in args.ids if i not in by_id]
     if missing:
         raise SystemExit(f"Not in the export: {missing}")
+    used = [i for i in args.ids if i in skill_example_ids()]
+    if used:
+        raise SystemExit(f"Used as examples in the skill ({SKILL_EXAMPLES}): {used}")
     sessions = []
     for i in args.ids:
         c = by_id[i]
