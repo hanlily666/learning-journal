@@ -15,6 +15,8 @@ import argparse
 import asyncio
 import hashlib
 import json
+import re
+import shutil
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -39,6 +41,7 @@ EXPORT = EVAL / "exports" / "claude" / "conversations.json"
 DATA = EVAL / "data"
 SESSIONS = DATA / "sessions.json"
 LABELS = DATA / "labels.json"
+READABLE = DATA / "read"  # the sampled sessions as Markdown, to read while labelling
 # Conversations used as examples in the selection skill: never sampled for the evaluation.
 SKILL_EXAMPLES = EVAL / "skill_examples.txt"
 EVAL_DB = "journal_eval"
@@ -211,7 +214,30 @@ def cmd_sample(args: argparse.Namespace) -> None:
                                         "items": [{"field": "concept | gap | explore | source",
                                                    "text": ""}]}
                    for s in sessions])
+    write_readable(sessions)
     print(f"Wrote {len(sessions)} sessions to {SESSIONS}; label them in {LABELS}.")
+    print(f"Read them in {READABLE}.")
+
+
+def write_readable(sessions: list[dict[str, Any]]) -> None:
+    """One Markdown file per session, named by set and numbered in labels.json order."""
+    shutil.rmtree(READABLE, ignore_errors=True)
+    READABLE.mkdir(parents=True)
+    for n, s in enumerate(sessions, 1):
+        slug = re.sub(r"[^\w]+", "-", s["name"]).strip("-")[:50] or "untitled"
+        lines = [f"# {s['name']}", "", f"- id: `{s['id']}`", f"- set: {s['set']}"]
+        if s["split_at"] is not None:
+            lines.append(f"- split: processed in two parts; part 2 starts at message {s['split_at'] + 1}")
+        for i, m in enumerate(s["messages"]):
+            if i == s["split_at"]:
+                lines += ["", "---", "", "**[ part 2 starts here ]**"]
+            lines += ["", f"## {i + 1}. {m['role']} ({m['created_at'][:16]})", "", m["text"]]
+        (READABLE / f"{s['set']}-{n:02d}-{slug}.md").write_text("\n".join(lines) + "\n")
+
+
+def cmd_read(_: argparse.Namespace) -> None:
+    write_readable(read(SESSIONS))
+    print(f"Wrote {len(read(SESSIONS))} sessions to {READABLE}.")
 
 
 # run: the real pipeline in journal_eval
@@ -474,6 +500,7 @@ def main() -> None:
     p.add_argument("--tune", nargs="*", default=[], help="the small set to tune on")
     p.add_argument("--split", nargs="*", default=[], help="sessions to process in two parts")
     p.set_defaults(func=cmd_sample)
+    sub.add_parser("read", help="write the sampled sessions as Markdown to read").set_defaults(func=cmd_read)
     for name, func_, help_ in (("run", cmd_run, "run the pipeline (classification + agent)"),
                                ("baseline", cmd_baseline, "run the single-request baseline")):
         p = sub.add_parser(name, help=help_)
